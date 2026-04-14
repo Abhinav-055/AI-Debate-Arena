@@ -1,0 +1,86 @@
+scalar Time
+
+enum DebateStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+enum AgentProvider {
+  GROQ
+}
+
+type Debate {
+  id: ID!
+  topic: String!
+  status: DebateStatus!
+  roundsTotal: Int!
+  roundsDone: Int!
+  createdAt: Time!
+  updatedAt: Time!
+  agents: [Agent!]!
+}
+
+type Agent {
+  id: ID!
+  debateId: ID!
+  name: String!
+  provider: AgentProvider!
+  personality: String!
+  turnOrder: Int!
+}
+
+type Message {
+  id: ID!
+  debateId: ID!
+  agentId: ID!
+  roundNumber: Int!
+  content: String!
+  createdAt: Time!
+}
+
+type JudgementDetail {
+  agentId: ID!
+  reason: String!
+}
+
+type Judgement {
+  id: ID!
+  debateId: ID!
+  winnerAgentId: ID!
+  strengths: [JudgementDetail!]!
+  weaknesses: [JudgementDetail!]!
+  verdict: String!
+  createdAt: Time!
+}
+
+input CreateDebateAgentInput {
+  name: String!
+  provider: AgentProvider!
+  personality: String!
+}
+
+input CreateDebateInput {
+  topic: String!
+  rounds: Int!
+  agents: [CreateDebateAgentInput!]!
+}
+
+type Query {
+  debate(id: ID!): Debate
+  debates(status: DebateStatus, limit: Int, offset: Int): [Debate!]!
+  messages(debateId: ID!, round: Int): [Message!]!
+  judgement(debateId: ID!): Judgement
+}
+
+type Mutation {
+  createDebate(input: CreateDebateInput!): Debate!
+  startDebate(id: ID!): Debate!
+  castVote(debateId: ID!, agentId: ID!): Boolean
+}
+
+type Subscription {
+  messageAdded(debateId: ID!): Message!
+  debateStatusChanged(debateId: ID!): Debate!
+  judgementReady(debateId: ID!): Judgement!
+}
