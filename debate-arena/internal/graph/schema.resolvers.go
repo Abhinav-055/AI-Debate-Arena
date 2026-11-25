@@ -43,6 +43,9 @@ func (r *mutationResolver) CreateDebate(ctx context.Context, input model.CreateD
 		Agents: agents,
 	})
 	if err != nil {
+		if r.Logger != nil {
+			r.Logger.Error("create debate failed", "error", err)
+		}
 		return nil, gqlerror.Errorf("INTERNAL: create debate failed")
 	}
 	res := toGraphDebate(created)

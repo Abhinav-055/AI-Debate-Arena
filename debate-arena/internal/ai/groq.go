@@ -20,6 +20,8 @@ type GroqProvider struct {
 	logger     *slog.Logger
 }
 
+const groqChatModel = "openai/gpt-oss-20b"
+
 // NewGroqProvider creates a Groq provider client.
 func NewGroqProvider(apiKey string, logger *slog.Logger) *GroqProvider {
 	return &GroqProvider{
@@ -35,7 +37,7 @@ func (p *GroqProvider) Name() string {
 	return "groq"
 }
 
-// Generate creates a completion with llama-3.1-8b-instant.
+// Generate creates a completion with the configured Groq chat model.
 func (p *GroqProvider) Generate(ctx context.Context, req GenerateRequest) (string, error) {
 	type message struct {
 		Role    string `json:"role"`
@@ -58,7 +60,7 @@ func (p *GroqProvider) Generate(ctx context.Context, req GenerateRequest) (strin
 	}
 
 	payload := groqRequest{
-		Model: "llama-3.1-8b-instant",
+		Model: groqChatModel,
 		Messages: []message{
 			{Role: "system", Content: req.SystemPrompt},
 			{Role: "user", Content: req.UserMessage},
@@ -107,6 +109,9 @@ func (p *GroqProvider) Generate(ctx context.Context, req GenerateRequest) (strin
 		}
 
 		out = strings.TrimSpace(decoded.Choices[0].Message.Content)
+		if out == "" {
+			return &ProviderError{Provider: p.Name(), Message: "empty response content", Temporary: false}
+		}
 		LogTokenUsage(p.logger, p.Name(), decoded.Usage.PromptTokens, decoded.Usage.CompletionTokens)
 		return nil
 	})

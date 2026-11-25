@@ -77,41 +77,95 @@ debate-arena/
 ## Prerequisites
 
 - Docker Desktop (or Docker Engine + Compose)
-- Go 1.22+ (if running locally without Docker)
+- Node.js and npm (for running the frontend)
+- Go 1.25+ (for running migrations or the backend locally without Docker)
 - Optional tools:
-  - `goose` for manual migration workflows
   - `wscat` for subscription testing
 
-## Quick Start
+## Quick Start (Windows PowerShell)
 
-1. Ensure `.env` is configured.
-2. From project root, run:
+1. Create a `.env` file in the project root with these settings. Replace the Groq key and JWT secret with your own values:
 
-```bash
-docker-compose up --build
+```env
+DATABASE_URL=postgres://postgres:postgres@postgres:5432/debate_arena?sslmode=disable
+REDIS_URL=redis://redis:6379/0
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+GROQ_API_KEY=your_groq_api_key
+JWT_SECRET=replace_with_a_long_random_secret
+FRONTEND_ORIGIN=http://localhost:5173
+POSTGRES_PORT=5433
+PORT=8080
+LOG_LEVEL=info
+MAX_ROUNDS=3
 ```
 
-3. Open GraphQL playground:
+2. Start PostgreSQL from the project root:
+
+```powershell
+docker compose up -d postgres
+```
+
+3. Apply the database schema before starting the API. This uses the host-mapped PostgreSQL port; substitute your `POSTGRES_PORT` if you changed it:
+
+```powershell
+go run github.com/pressly/goose/v3/cmd/goose@latest -dir internal/db/migrations postgres "postgres://postgres:postgres@localhost:5433/debate_arena?sslmode=disable" up
+```
+
+4. Build and start the API, worker, and remaining dependencies:
+
+```powershell
+docker compose up --build -d
+```
+
+5. Check service status and API health:
+
+```powershell
+docker compose ps
+Invoke-RestMethod -Uri http://localhost:8080/healthz
+```
+
+6. Open the GraphQL playground at `http://localhost:8080/`.
+
+7. In a separate terminal, start the frontend as described below.
+
+## Frontend Development
+
+The frontend is a Vite/React app. Keep the backend stack running while using it; the app connects to the GraphQL API at `http://localhost:8080/graphql` and uses `ws://localhost:8080/graphql` for subscriptions.
+
+From the project root, run in a separate PowerShell terminal:
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev
+```
+
+Open the frontend at:
 
 ```text
-http://localhost:8080/
+http://localhost:5173/
 ```
 
-4. Health check:
+To create a production build, run `npm run build` from the `frontend` directory.
 
-```bash
-curl http://localhost:8080/healthz
+After creating a debate, open it and select **Start Debate** to enqueue its first turn. The worker currently uses Groq's `openai/gpt-oss-20b` model. To watch service logs, run `docker compose logs -f api worker` from the project root. If you change `GROQ_API_KEY` in `.env`, recreate the worker so it loads the new value:
+
+```powershell
+docker compose up -d --force-recreate worker
+```
+
+Stop the containers without deleting the database volume:
+
+```powershell
+docker compose down
 ```
 
 ## Database Migrations
 
-Migrations are in `internal/db/migrations` using goose SQL format.
+Migrations are in `internal/db/migrations` using goose SQL format. Quick Start runs Goose with `go run`, so a separate Goose installation is not needed. To check migration status after PostgreSQL is running:
 
-If running locally with goose:
-
-```bash
-go install github.com/pressly/goose/v3/cmd/goose@latest
-goose -dir internal/db/migrations postgres "$DATABASE_URL" up
+```powershell
+go run github.com/pressly/goose/v3/cmd/goose@latest -dir internal/db/migrations postgres "postgres://postgres:postgres@localhost:5433/debate_arena?sslmode=disable" status
 ```
 
 ## GraphQL API Examples
@@ -187,6 +241,8 @@ Then send GraphQL websocket messages following the GraphQL over WebSocket protoc
 | `RABBITMQ_URL` | yes | RabbitMQ AMQP URL |
 | `GROQ_API_KEY` | yes | Groq API key |
 | `JWT_SECRET` | yes | HMAC secret for JWT middleware |
+| `FRONTEND_ORIGIN` | no | Allowed browser origin for GraphQL WebSockets (default `http://localhost:5173`) |
+| `POSTGRES_PORT` | no | Host port mapped to PostgreSQL (default `5433`; container port remains `5432`) |
 | `PORT` | no | API port (default `8080`) |
 | `LOG_LEVEL` | no | `debug`, `info`, `warn`, `error` |
 | `MAX_ROUNDS` | no | Default max rounds (default `3`) |
